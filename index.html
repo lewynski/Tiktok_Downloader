@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Clip Saver · TikTok Downloader</title>
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --card: rgba(255,255,255,.7);
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --blue: #0071e3;
+    --blue-hover: #0077ed;
+    --border: rgba(0,0,0,.08);
+    --shadow: 0 20px 60px rgba(0,0,0,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000;
+      --card: rgba(28,28,30,.7);
+      --text: #f5f5f7;
+      --muted: #a1a1a6;
+      --border: rgba(255,255,255,.12);
+      --shadow: 0 20px 60px rgba(0,0,0,.5);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    overflow-x: hidden;
+  }
+
+  /* Ambient animated blobs */
+  .blob {
+    position: fixed; border-radius: 50%; filter: blur(80px); opacity: .45;
+    z-index: -1; animation: float 14s ease-in-out infinite alternate;
+  }
+  .b1 { width: 420px; height: 420px; background: #ff2d55; top: -120px; left: -100px; }
+  .b2 { width: 380px; height: 380px; background: #5ac8fa; bottom: -120px; right: -80px; animation-delay: -5s; }
+  .b3 { width: 300px; height: 300px; background: #af52de; top: 40%; left: 50%; animation-delay: -9s; }
+  @keyframes float {
+    to { transform: translate(60px, -40px) scale(1.1); }
+  }
+
+  .card {
+    width: min(560px, 100%);
+    background: var(--card);
+    backdrop-filter: saturate(180%) blur(24px);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    padding: 48px 40px;
+    box-shadow: var(--shadow);
+    text-align: center;
+    animation: rise .8s cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(24px) scale(.98); }
+  }
+
+  .logo {
+    width: 68px; height: 68px; margin: 0 auto 20px; border-radius: 18px;
+    background: linear-gradient(135deg, #ff2d55, #af52de 55%, #5ac8fa);
+    display: grid; place-items: center; font-size: 30px;
+    animation: pop .6s .2s cubic-bezier(.34,1.56,.64,1) both;
+    box-shadow: 0 10px 30px rgba(175,82,222,.35);
+  }
+  @keyframes pop { from { transform: scale(.4); opacity: 0; } }
+
+  h1 {
+    font-size: 40px; font-weight: 700; letter-spacing: -.03em; line-height: 1.1;
+    animation: fade .8s .15s both;
+  }
+  .sub {
+    color: var(--muted); font-size: 17px; margin: 12px 0 32px;
+    animation: fade .8s .3s both;
+  }
+  @keyframes fade { from { opacity: 0; transform: translateY(10px); } }
+
+  form { display: flex; gap: 10px; animation: fade .8s .45s both; }
+  input {
+    flex: 1; min-width: 0; padding: 16px 20px; font-size: 16px;
+    border-radius: 14px; border: 1px solid var(--border);
+    background: rgba(127,127,127,.08); color: var(--text); outline: none;
+    transition: border-color .2s, box-shadow .2s, transform .2s;
+  }
+  input:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 4px rgba(0,113,227,.2);
+  }
+  input.shake { animation: shake .4s; }
+  @keyframes shake {
+    20%,60% { transform: translateX(-6px); }
+    40%,80% { transform: translateX(6px); }
+  }
+
+  button {
+    padding: 16px 24px; font-size: 16px; font-weight: 600; font-family: inherit;
+    border: 0; border-radius: 14px; background: var(--blue); color: #fff;
+    cursor: pointer; transition: background .2s, transform .15s;
+  }
+  button:hover { background: var(--blue-hover); }
+  button:active { transform: scale(.96); }
+  button:disabled { opacity: .6; cursor: default; }
+
+  .status { min-height: 24px; margin-top: 20px; font-size: 15px; color: var(--muted); }
+  .status.error { color: #ff3b30; }
+
+  .loader {
+    width: 36px; height: 36px; margin: 16px auto 0; border-radius: 50%;
+    border: 3px solid var(--border); border-top-color: var(--blue);
+    animation: spin .8s linear infinite; display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .result {
+    margin-top: 24px; padding: 20px; border-radius: 18px;
+    background: rgba(127,127,127,.08); display: none;
+    animation: rise .5s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .result p { font-size: 15px; margin-bottom: 16px; word-break: break-word; }
+  .result a {
+    display: inline-block; padding: 14px 28px; border-radius: 980px;
+    background: var(--blue); color: #fff; text-decoration: none; font-weight: 600;
+    transition: transform .15s;
+  }
+  .result a:hover { transform: scale(1.04); }
+
+  @media (max-width: 480px) {
+    .card { padding: 36px 24px; }
+    h1 { font-size: 32px; }
+    form { flex-direction: column; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="blob b1"></div>
+  <div class="blob b2"></div>
+  <div class="blob b3"></div>
+
+  <main class="card">
+    <div class="logo">⬇︎</div>
+    <h1>Clip Saver</h1>
+    <p class="sub">Paste a TikTok link. Download it in one tap.</p>
+
+    <form id="form">
+      <input id="url" type="url" placeholder="https://www.tiktok.com/@user/video/..." required />
+      <button id="btn" type="submit">Download</button>
+    </form>
+
+    <div class="loader" id="loader"></div>
+    <div class="status" id="status"></div>
+
+    <div class="result" id="result">
+      <p id="title"></p>
+      <a id="download" href="#" download>Save Video</a>
+    </div>
+  </main>
+
+<script>
+  const form = document.getElementById("form");
+  const input = document.getElementById("url");
+  const btn = document.getElementById("btn");
+  const status = document.getElementById("status");
+  const loader = document.getElementById("loader");
+  const result = document.getElementById("result");
+
+  function setError(msg) {
+    status.textContent = msg;
+    status.classList.add("error");
+    input.classList.remove("shake");
+    void input.offsetWidth; // restart animation
+    input.classList.add("shake");
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    status.textContent = "";
+    status.classList.remove("error");
+    result.style.display = "none";
+    loader.style.display = "block";
+    btn.disabled = true;
+
+    try {
+      const res = await fetch("/api/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: input.value.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Something went wrong.");
+
+      document.getElementById("title").textContent = data.title;
+      document.getElementById("download").href =
+        "/api/download?src=" + encodeURIComponent(data.videoUrl);
+      result.style.display = "block";
+      status.textContent = "Ready.";
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      loader.style.display = "none";
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
