@@ -1,6 +1,5 @@
-// api/download.js
 export default async function handler(req, res) {
-  // Set CORS and Header content type
+  // Set CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -20,16 +19,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Example: Fetch data from TikTok API / scraper
-    // Replace this block with your actual TikTok fetch/extract logic
-    const videoData = {
-      status: 'success',
-      downloadUrl: 'https://example.com/video.mp4', // Extracted video URL
-      title: 'TikTok Video'
-    };
+    // Fetch video data from TikWM API (No watermark)
+    const apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`;
+    const response = await fetch(apiUrl);
+    const data = await response.json();
 
-    return res.status(200).json(videoData);
+    if (data.code === 0 && data.data) {
+      return res.status(200).json({
+        status: 'success',
+        videoUrl: data.data.play, // Direct watermark-free MP4 URL
+        downloadUrl: data.data.play, // Fallback key matching both script formats
+        title: data.data.title || 'TikTok Video',
+        author: data.data.author?.nickname || ''
+      });
+    } else {
+      return res.status(400).json({ error: 'Unable to process this TikTok video. Please check the link.' });
+    }
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to fetch TikTok video' });
+    return res.status(500).json({ error: 'Failed to connect to video extraction server.' });
   }
 }
