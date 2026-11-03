@@ -141,7 +141,7 @@
           </form>
           <div class="support"><span>Paste a public video link to get started.</span><button id="paste" type="button" class="sample">Paste from clipboard ↗</button></div>
           <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
-          <div id="result" class="result" aria-live="polite"><div class="result-info"><div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></div><div><div class="result-label">Your video is ready</div><div id="title" class="result-title"></div></div></div><a id="download" class="save" href="#" download>Save video ↓</a></div>
+          <div id="result" class="result" aria-live="polite"><div class="result-info"><div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></div><div><div class="result-label">Your video is ready</div><div id="title" class="result-title"></div></div></div><a id="download" class="save" href="#" target="_blank" rel="noopener noreferrer">Save video ↓</a></div>
         </div>
       </section>
       <section id="how-it-works" aria-labelledby="steps-title">
@@ -181,13 +181,15 @@
       feedback.append(text);
       feedback.setAttribute('role', type === 'error' ? 'alert' : 'status');
     }
+
     function isTikTokUrl(raw) {
       try {
         const url = new URL(raw);
         const host = url.hostname.toLowerCase();
-        return url.protocol === 'https:' && (host === 'tiktok.com' || host.endsWith('.tiktok.com'));
+        return url.protocol === 'https:' && (host === 'tiktok.com' || host.endsWith('.tiktok.com') || host.endsWith('vt.tiktok.com'));
       } catch { return false; }
     }
+
     paste.addEventListener('click', async () => {
       try {
         const value = await navigator.clipboard.readText();
@@ -198,31 +200,42 @@
         showFeedback('Clipboard access is unavailable. Paste your link manually.', 'error');
       }
     });
+
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       const url = input.value.trim();
       result.classList.remove('visible');
+
       if (!isTikTokUrl(url)) {
         showFeedback('Enter a valid HTTPS TikTok video link.', 'error');
         input.focus();
         return;
       }
+
       btn.disabled = true;
       btnLabel.textContent = 'Processing…';
       showFeedback('Fetching your video. This may take a moment…', 'loading');
+
       try {
-        const response = await fetch('/api/download', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
-        });
+        const response = await fetch(`/api/download?url=${encodeURIComponent(url)}`);
+        
         let data;
-        try { data = await response.json(); }
-        catch { throw new Error('The server returned an invalid response.'); }
+        try { 
+          data = await response.json(); 
+        } catch { 
+          throw new Error('The server returned an invalid response.'); 
+        }
+
         if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Unable to process this video.');
-        if (typeof data.videoUrl !== 'string' || !data.videoUrl) throw new Error('The server did not provide a video link.');
+        
+        // Supports both 'videoUrl' and 'downloadUrl' parameter names from your API
+        const targetUrl = data.videoUrl || data.downloadUrl;
+        if (!targetUrl) throw new Error('The server did not provide a valid video link.');
+
         title.textContent = typeof data.title === 'string' && data.title ? data.title : 'TikTok video';
-        download.href = '/api/download?src=' + encodeURIComponent(data.videoUrl);
+        
+        // Set direct direct video stream URL to trigger actual media download
+        download.href = targetUrl;
         result.classList.add('visible');
         feedback.className = 'feedback';
       } catch (error) {
