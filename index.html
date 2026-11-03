@@ -4,212 +4,453 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PixelSaver - 8-Bit TikTok Downloader</title>
-  
-  <!-- Import 8-Bit Font mula sa Google Fonts -->
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 
   <style>
-    /* 8-Bit Retro Styling */
     :root {
-      --bg-color: #000000;
-      --container-bg: #1a1a2e;
-      --text-main: #ffffff;
-      --text-dim: #aaaaaa;
-      --accent-cyan: #00ffff;
-      --accent-magenta: #ff00ff;
-      --accent-green: #39ff14;
-      --accent-red: #ff003c;
+      --bg-1: #0b0221;
+      --bg-2: #1b0b3b;
+      --panel: #1a1a2e;
+      --panel-2: #12122a;
+      --white: #ffffff;
+      --dim: #9aa0c3;
+      --cyan: #00f0ff;
+      --magenta: #ff2bd6;
+      --green: #39ff14;
+      --red: #ff2e63;
+      --yellow: #ffe600;
+      --px: 4px;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { image-rendering: pixelated; }
 
     body {
-      background-color: var(--bg-color);
-      color: var(--text-main);
-      font-family: 'Press Start 2P', monospace; /* Pixel Font */
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      font-family: 'Press Start 2P', monospace;
+      color: var(--white);
       min-height: 100vh;
-      background-image: 
-        linear-gradient(#222 1px, transparent 1px),
-        linear-gradient(90deg, #222 1px, transparent 1px);
-      background-size: 20px 20px; /* Grid background effect */
-    }
-
-    .pixel-container {
-      background-color: var(--container-bg);
-      border: 4px solid var(--text-main);
-      box-shadow: 10px 10px 0px var(--accent-magenta);
-      padding: 40px 30px;
-      width: 90%;
-      max-width: 600px;
-      text-align: center;
-    }
-
-    h1 {
-      font-size: 24px;
-      color: var(--accent-cyan);
-      text-shadow: 4px 4px 0px var(--accent-red);
-      margin-bottom: 15px;
-      line-height: 1.4;
-    }
-
-    p {
-      font-size: 10px;
-      color: var(--text-dim);
-      line-height: 1.8;
-      margin-bottom: 30px;
-    }
-
-    .form-group {
+      overflow-x: hidden;
+      background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 55%, #2a0f4d 100%);
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      align-items: center;
+      padding: 24px 16px 40px;
+      position: relative;
+    }
+
+    /* ---------- Background layers ---------- */
+    #stars {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    }
+
+    .grid-floor {
+      position: fixed; left: -50%; right: -50%; bottom: 0; height: 45vh; z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(var(--magenta) 2px, transparent 2px),
+        linear-gradient(90deg, var(--magenta) 2px, transparent 2px);
+      background-size: 60px 60px;
+      opacity: .22;
+      transform: perspective(300px) rotateX(62deg);
+      transform-origin: bottom;
+      animation: floor-scroll 2.5s linear infinite;
+      -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 95%);
+              mask-image: linear-gradient(to top, #000 10%, transparent 95%);
+    }
+    @keyframes floor-scroll { to { background-position: 0 60px; } }
+
+    /* CRT scanlines + vignette */
+    .crt {
+      position: fixed; inset: 0; z-index: 50; pointer-events: none;
+      background:
+        repeating-linear-gradient(to bottom, rgba(0,0,0,.18) 0, rgba(0,0,0,.18) 1px, transparent 1px, transparent 3px),
+        radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%);
+      mix-blend-mode: multiply;
+    }
+    .crt::after {
+      content: ""; position: absolute; inset: 0;
+      background: rgba(120,255,255,.025);
+      animation: flicker 4s infinite;
+    }
+    @keyframes flicker {
+      0%,100% { opacity: 1; } 47% { opacity: 1; } 48% { opacity: .4; } 50% { opacity: 1; } 78% { opacity: .7; } 80% { opacity: 1; }
+    }
+
+    /* ---------- HUD ---------- */
+    .hud {
+      position: relative; z-index: 2;
+      width: 100%; max-width: 680px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 10px; margin-bottom: 20px; gap: 10px;
+      text-shadow: 2px 2px 0 #000;
+    }
+    .hud .label { color: var(--yellow); }
+    .hud .hearts { color: var(--red); letter-spacing: 3px; }
+    .hud-right { display: flex; gap: 12px; align-items: center; }
+
+    .sound-btn {
+      font-family: inherit; font-size: 9px; padding: 8px 10px;
+      background: var(--panel-2); color: var(--cyan);
+      border: 3px solid var(--cyan); cursor: pointer;
+      box-shadow: 3px 3px 0 #000;
+    }
+    .sound-btn[aria-pressed="false"] { color: var(--dim); border-color: var(--dim); }
+    .sound-btn:hover { transform: translate(1px,1px); box-shadow: 2px 2px 0 #000; }
+
+    /* ---------- Main card ---------- */
+    .stage { position: relative; z-index: 2; width: 100%; max-width: 680px; }
+
+    .pixel-container {
+      position: relative;
+      background: var(--panel);
+      padding: 38px 30px 34px;
+      text-align: center;
+      /* pixel-notched border via box-shadows */
+      box-shadow:
+        0 -var(--px) 0 0 var(--white),
+        0 var(--px) 0 0 var(--white),
+        calc(-1 * var(--px)) 0 0 0 var(--white),
+        var(--px) 0 0 0 var(--white),
+        12px 12px 0 0 var(--magenta),
+        0 0 60px rgba(255,43,214,.25);
+      animation: card-in .6s steps(8) both;
+    }
+    @keyframes card-in { from { opacity: 0; transform: translateY(24px); } }
+
+    .pixel-container::before,
+    .pixel-container::after {
+      content: ""; position: absolute; width: 12px; height: 12px; background: var(--cyan);
+    }
+    .pixel-container::before { top: 10px; left: 10px; box-shadow: 0 0 10px var(--cyan); }
+    .pixel-container::after  { bottom: 10px; right: 10px; box-shadow: 0 0 10px var(--cyan); }
+
+    /* Logo */
+    .logo-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-bottom: 8px; }
+
+    .sprite {
+      width: 64px; height: 64px;
+      animation: bob 1.2s steps(2) infinite;
+      filter: drop-shadow(4px 4px 0 rgba(0,0,0,.6));
+    }
+    @keyframes bob { 50% { transform: translateY(-6px); } }
+
+    h1 {
+      font-size: clamp(24px, 6.5vw, 40px);
+      line-height: 1.25;
+      color: var(--cyan);
+      letter-spacing: 2px;
+      text-shadow:
+        3px 3px 0 var(--magenta),
+        6px 6px 0 var(--red),
+        0 0 24px rgba(0,240,255,.6);
+      position: relative;
+    }
+    h1 .glitch { display: inline-block; animation: glitch 5s infinite steps(1); }
+    @keyframes glitch {
+      0%, 92%, 100% { transform: translate(0); }
+      93% { transform: translate(-3px, 1px); }
+      95% { transform: translate(3px, -1px); }
+      97% { transform: translate(-2px, 0); }
+    }
+
+    .tagline {
+      font-family: 'VT323', monospace;
+      font-size: 24px;
+      color: var(--dim);
+      margin: 14px 0 26px;
+      letter-spacing: 1px;
+    }
+    .insert-coin { color: var(--yellow); animation: blink 1s steps(2, start) infinite; }
+
+    @keyframes blink { to { visibility: hidden; } }
+
+    /* ---------- Form ---------- */
+    .form-group { display: flex; flex-direction: column; gap: 18px; }
+
+    .input-row { display: flex; gap: 10px; }
+
+    .input-wrap { position: relative; flex: 1; min-width: 0; }
+    .input-wrap::before {
+      content: ">"; position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      color: var(--cyan); font-size: 14px;
     }
 
     input[type="url"] {
       width: 100%;
       background: #000;
-      border: 4px solid var(--text-main);
-      color: var(--accent-green);
-      font-family: 'Press Start 2P', monospace;
-      font-size: 12px;
-      padding: 15px;
+      border: 4px solid var(--white);
+      color: var(--green);
+      font-family: 'VT323', monospace;
+      font-size: 24px;
+      padding: 14px 14px 12px 38px;
       outline: none;
+      caret-color: var(--green);
+      text-shadow: 0 0 6px rgba(57,255,20,.6);
+      transition: border-color .15s, box-shadow .15s;
     }
-
+    input[type="url"]::placeholder { color: #4a4f73; text-shadow: none; }
     input[type="url"]:focus {
-      border-color: var(--accent-cyan);
-      box-shadow: 0 0 10px var(--accent-cyan);
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 4px rgba(0,240,255,.2), 0 0 18px var(--cyan);
+    }
+    input[type="url"].shake { animation: shake .35s steps(6); border-color: var(--red); }
+    @keyframes shake {
+      20% { transform: translateX(-8px); } 40% { transform: translateX(8px); }
+      60% { transform: translateX(-6px); } 80% { transform: translateX(6px); }
     }
 
-    input::placeholder {
-      color: #555555;
+    .paste-btn {
+      flex: 0 0 auto;
+      font-family: inherit; font-size: 10px;
+      background: var(--panel-2); color: var(--yellow);
+      border: 4px solid var(--yellow);
+      padding: 0 14px; cursor: pointer;
+      box-shadow: 4px 4px 0 #000;
+      transition: transform .1s, box-shadow .1s;
     }
+    .paste-btn:hover { transform: translate(2px,2px); box-shadow: 2px 2px 0 #000; background: #2a2a10; }
+    .paste-btn:active { transform: translate(4px,4px); box-shadow: 0 0 0 #000; }
 
-    button {
-      background: var(--accent-magenta);
-      color: var(--text-main);
-      border: 4px solid var(--text-main);
+    button.main {
+      position: relative; overflow: hidden;
+      background: var(--magenta);
+      color: var(--white);
+      border: 4px solid var(--white);
       font-family: 'Press Start 2P', monospace;
       font-size: 14px;
-      padding: 15px;
+      padding: 18px 15px;
       cursor: pointer;
-      box-shadow: 6px 6px 0px var(--accent-cyan);
-      transition: transform 0.1s, box-shadow 0.1s;
+      text-shadow: 2px 2px 0 rgba(0,0,0,.5);
+      box-shadow: 6px 6px 0 var(--cyan);
+      transition: transform .1s, box-shadow .1s;
     }
-
-    button:hover:not(:disabled) {
-      transform: translate(2px, 2px);
-      box-shadow: 4px 4px 0px var(--accent-cyan);
+    button.main::before {
+      content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -60%;
+      background: linear-gradient(100deg, transparent, rgba(255,255,255,.35), transparent);
+      transform: skewX(-20deg);
+      animation: shine 3s infinite;
     }
+    @keyframes shine { 60%, 100% { left: 130%; } }
 
-    button:active:not(:disabled) {
-      transform: translate(6px, 6px);
-      box-shadow: 0px 0px 0px var(--accent-cyan);
+    button.main:hover:not(:disabled) { transform: translate(2px,2px); box-shadow: 4px 4px 0 var(--cyan); }
+    button.main:active:not(:disabled) { transform: translate(6px,6px); box-shadow: 0 0 0 var(--cyan); }
+    button.main:disabled { background: #444; box-shadow: 6px 6px 0 #222; cursor: not-allowed; }
+    button.main:disabled::before { display: none; }
+
+    .blink { animation: blink 1s steps(2, start) infinite; }
+
+    /* ---------- Loading bar ---------- */
+    .loader { display: none; margin-top: 22px; text-align: left; }
+    .loader.visible { display: block; }
+    .loader-label { font-size: 9px; color: var(--yellow); margin-bottom: 8px; }
+    .bar {
+      height: 26px; background: #000; border: 4px solid var(--white); padding: 3px;
+      display: flex; gap: 3px;
     }
+    .bar i { flex: 1; background: #222; transition: background .1s; }
+    .bar i.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
 
-    button:disabled {
-      background: #555;
-      box-shadow: 6px 6px 0px #333;
-      cursor: not-allowed;
-    }
-
+    /* ---------- Feedback ---------- */
     .feedback {
-      margin-top: 20px;
-      font-size: 10px;
-      color: yellow;
-      min-height: 15px;
+      margin-top: 20px; font-size: 10px; line-height: 1.8;
+      color: var(--yellow); min-height: 18px;
     }
-
     .feedback.error {
-      color: var(--accent-red);
+      color: var(--red);
+      text-shadow: 0 0 10px rgba(255,46,99,.6);
     }
+    .feedback.ok { color: var(--green); }
 
+    /* ---------- Result ---------- */
     #result {
-      display: none;
-      margin-top: 30px;
-      padding-top: 20px;
-      border-top: 4px dashed #555;
+      display: none; margin-top: 26px; padding: 24px 16px 20px;
+      border: 4px dashed var(--dim);
+      background: repeating-linear-gradient(45deg, rgba(255,255,255,.03) 0 10px, transparent 10px 20px);
+      position: relative;
+    }
+    #result.visible { display: block; animation: pop .5s steps(6) both; }
+    @keyframes pop { 0% { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.05); } 100% { transform: scale(1); opacity: 1; } }
+
+    .level-complete {
+      font-size: 14px; color: var(--yellow);
+      text-shadow: 3px 3px 0 var(--red);
+      margin-bottom: 14px;
+      animation: rainbow 1.2s steps(4) infinite;
+    }
+    @keyframes rainbow {
+      0% { color: var(--yellow); } 25% { color: var(--green); }
+      50% { color: var(--cyan); } 75% { color: var(--magenta); } 100% { color: var(--yellow); }
     }
 
-    #result.visible {
-      display: block;
-    }
+    .stars-row { font-size: 20px; color: var(--yellow); letter-spacing: 6px; margin-bottom: 14px; text-shadow: 2px 2px 0 #000; }
 
     #title {
-      font-size: 10px;
-      color: var(--text-dim);
-      margin-bottom: 20px;
+      font-family: 'VT323', monospace;
+      font-size: 22px; line-height: 1.2;
+      color: var(--white);
+      margin: 0 auto 22px;
+      max-width: 90%;
       word-wrap: break-word;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
     }
 
     .save-btn {
-      display: inline-block;
-      background: var(--accent-green);
-      color: #000;
-      text-decoration: none;
-      font-size: 12px;
-      padding: 15px 20px;
-      border: 4px solid var(--text-main);
-      box-shadow: 6px 6px 0px var(--text-main);
-      transition: transform 0.1s, box-shadow 0.1s;
+      display: inline-flex; align-items: center; gap: 10px;
+      background: var(--green); color: #000;
+      text-decoration: none; font-size: 13px;
+      padding: 16px 22px;
+      border: 4px solid var(--white);
+      box-shadow: 6px 6px 0 var(--white);
+      transition: transform .1s, box-shadow .1s;
+    }
+    .save-btn:hover { transform: translate(2px,2px); box-shadow: 4px 4px 0 var(--white); }
+    .save-btn:active { transform: translate(6px,6px); box-shadow: 0 0 0 var(--white); }
+    .save-btn svg { width: 18px; height: 18px; shape-rendering: crispEdges; }
+
+    .again { display: block; margin: 20px auto 0; background: none; border: none; font-family: inherit; font-size: 9px; color: var(--cyan); cursor: pointer; text-decoration: underline; }
+    .again:hover { color: var(--white); }
+
+    /* ---------- How to play ---------- */
+    .howto {
+      margin-top: 34px; padding-top: 24px;
+      border-top: 4px solid #2c2c52;
+      text-align: left;
+    }
+    .howto h2 { font-size: 11px; color: var(--cyan); margin-bottom: 18px; text-align: center; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .step {
+      background: var(--panel-2); border: 3px solid #3a3a6a;
+      padding: 14px 10px; text-align: center;
+      box-shadow: 4px 4px 0 #000;
+      transition: transform .15s, border-color .15s;
+    }
+    .step:hover { transform: translateY(-4px); border-color: var(--magenta); }
+    .step .num {
+      display: inline-block; width: 28px; height: 28px; line-height: 28px;
+      background: var(--magenta); color: #fff; font-size: 11px; margin-bottom: 10px;
+      box-shadow: 3px 3px 0 var(--cyan);
+    }
+    .step p { font-family: 'VT323', monospace; font-size: 20px; color: var(--dim); line-height: 1.1; }
+
+    /* ---------- Footer ---------- */
+    footer {
+      position: relative; z-index: 2; margin-top: 34px;
+      font-family: 'VT323', monospace; font-size: 18px; color: var(--dim);
+      text-align: center; max-width: 560px; line-height: 1.2;
+    }
+    footer b { color: var(--yellow); font-weight: normal; }
+
+    /* ---------- Floating pixel sprites ---------- */
+    .float { position: fixed; z-index: 1; pointer-events: none; image-rendering: pixelated; opacity: .9; }
+    .f1 { top: 14%; left: 6%;  width: 44px; animation: drift 6s ease-in-out infinite; }
+    .f2 { top: 28%; right: 7%; width: 40px; animation: drift 7s ease-in-out infinite reverse; }
+    .f3 { bottom: 24%; left: 9%; width: 36px; animation: drift 5s ease-in-out infinite; }
+    .f4 { bottom: 18%; right: 10%; width: 48px; animation: drift 8s ease-in-out infinite reverse; }
+    @keyframes drift { 50% { transform: translateY(-18px) rotate(6deg); } }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 560px) {
+      .pixel-container { padding: 30px 16px 26px; box-shadow: 0 0 0 var(--px) var(--white), 8px 8px 0 var(--magenta); }
+      .input-row { flex-direction: column; }
+      .paste-btn { padding: 12px; }
+      .steps { grid-template-columns: 1fr; }
+      .float { display: none; }
+      .hud { font-size: 8px; }
     }
 
-    .save-btn:hover {
-      transform: translate(2px, 2px);
-      box-shadow: 4px 4px 0px var(--text-main);
-    }
-
-    .save-btn:active {
-      transform: translate(6px, 6px);
-      box-shadow: 0px 0px 0px var(--text-main);
-    }
-
-    /* Blinking cursor effect */
-    .blink {
-      animation: blink-animation 1s steps(2, start) infinite;
-    }
-    @keyframes blink-animation {
-      to { visibility: hidden; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
     }
   </style>
 </head>
 <body>
 
-  <div class="pixel-container">
-    <h1>PIXEL<br>SAVER</h1>
-    <p>INSERT COIN (or TikTok URL) TO CONTINUE...</p>
+  <canvas id="stars" aria-hidden="true"></canvas>
+  <div class="grid-floor" aria-hidden="true"></div>
+  <div class="crt" aria-hidden="true"></div>
 
-    <form id="form" novalidate>
-      <div class="form-group">
-        <input 
-          id="url" 
-          type="url" 
-          placeholder="HTTPS://TIKTOK.COM/..." 
-          required 
-        />
-        <button id="btn" type="submit">GET VIDEO <span class="blink">_</span></button>
-      </div>
-    </form>
+  <!-- Floating pixel sprites (inline SVG, pixel-art) -->
+  <svg class="float f1" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><path fill="#ff2e63" d="M1 1h2v1h2V1h2v2h1v2H7v1H6v1H5v1H3V7H2V6H1V5H0V3h1z"/><path fill="#fff" d="M2 2h1v1H2z"/></svg>
+  <svg class="float f2" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><path fill="#ffe600" d="M3 0h2v2h3v2H5v1h1v3H5V6H3v2H2V5h1V4H0V2h3z"/></svg>
+  <svg class="float f3" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><path fill="#00f0ff" d="M2 0h4v1h1v1h1v4H7v1H6v1H2V7H1V6H0V2h1V1h1z"/><path fill="#0b0221" d="M2 3h1v2H2zM5 3h1v2H5z"/></svg>
+  <svg class="float f4" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><path fill="#39ff14" d="M0 3h1V2h1V1h4v1h1v1h1v2H7v1H6v1H2V6H1V5H0z"/><path fill="#0b0221" d="M2 3h1v1H2zM5 3h1v1H5z"/></svg>
 
-    <div id="feedback" class="feedback"></div>
-
-    <div id="result">
-      <div id="title">LEVEL COMPLETE!</div>
-      <!-- Dadaan ito sa /api/download?stream=true para rekta download -->
-      <a id="download" class="save-btn" href="#">DOWNLOAD .MP4</a>
+  <!-- HUD -->
+  <div class="hud" role="presentation">
+    <div><span class="label">1UP</span> <span id="score">000000</span></div>
+    <div class="hearts" aria-label="Lives">♥♥♥</div>
+    <div class="hud-right">
+      <div><span class="label">HI</span> 999999</div>
+      <button class="sound-btn" id="sound" type="button" aria-pressed="true" title="Toggle sound">SND: ON</button>
     </div>
   </div>
 
+  <main class="stage">
+    <div class="pixel-container">
+
+      <div class="logo-wrap">
+        <!-- Pixel-art arrow-down-into-tray logo -->
+        <svg class="sprite" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">
+          <path fill="#00f0ff" d="M6 1h4v6h3v1h-1v1h-1v1H9v1H7v-1H5V9H4V8H3V7h3z"/>
+          <path fill="#ff2bd6" d="M1 12h2v2h10v-2h2v4H1z"/>
+          <path fill="#fff" d="M7 2h1v4H7z"/>
+        </svg>
+        <h1><span class="glitch">PIXEL<br>SAVER</span></h1>
+      </div>
+
+      <div class="tagline"><span class="insert-coin">INSERT COIN</span> (or TikTok URL) TO CONTINUE...</div>
+
+      <form id="form" novalidate>
+        <div class="form-group">
+          <div class="input-row">
+            <div class="input-wrap">
+              <input id="url" type="url" placeholder="https://tiktok.com/..." required autocomplete="off" spellcheck="false" aria-label="TikTok video URL" />
+            </div>
+            <button class="paste-btn" id="paste" type="button" title="Paste from clipboard">PASTE</button>
+          </div>
+          <button id="btn" class="main" type="submit">GET VIDEO <span class="blink">_</span></button>
+        </div>
+      </form>
+
+      <div class="loader" id="loader" aria-hidden="true">
+        <div class="loader-label">LOADING...</div>
+        <div class="bar" id="bar"></div>
+      </div>
+
+      <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+
+      <div id="result">
+        <div class="level-complete">LEVEL COMPLETE!</div>
+        <div class="stars-row" aria-hidden="true">★ ★ ★</div>
+        <div id="title">TIKTOK VIDEO READY</div>
+        <a id="download" class="save-btn" href="#">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="#000" d="M6 1h4v6h3v1h-1v1h-1v1H9v1H7v-1H5V9H4V8H3V7h3zM2 13h12v2H2z"/></svg>
+          DOWNLOAD .MP4
+        </a>
+        <button class="again" id="again" type="button">&gt; PLAY AGAIN</button>
+      </div>
+
+      <section class="howto">
+        <h2>HOW TO PLAY</h2>
+        <div class="steps">
+          <div class="step"><div class="num">1</div><p>Copy the TikTok video link</p></div>
+          <div class="step"><div class="num">2</div><p>Paste it above and hit GET VIDEO</p></div>
+          <div class="step"><div class="num">3</div><p>Press DOWNLOAD and save it</p></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <b>PIXELSAVER</b> &copy; <span id="year"></span> &mdash; Developer: <b>Lewynv</b>
+  </footer>
+
   <script>
+    /* ---------- Elements ---------- */
     const form = document.getElementById('form');
     const input = document.getElementById('url');
     const btn = document.getElementById('btn');
@@ -217,22 +458,130 @@
     const result = document.getElementById('result');
     const title = document.getElementById('title');
     const download = document.getElementById('download');
+    const loader = document.getElementById('loader');
+    const bar = document.getElementById('bar');
+    const pasteBtn = document.getElementById('paste');
+    const againBtn = document.getElementById('again');
+    const soundBtn = document.getElementById('sound');
+    const scoreEl = document.getElementById('score');
 
-    function showFeedback(message, isError = false) {
-      feedback.textContent = message;
-      feedback.className = `feedback ${isError ? 'error' : ''}`;
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    /* ---------- 8-bit sound (WebAudio, no files needed) ---------- */
+    let soundOn = true;
+    let audioCtx = null;
+    function beep(freqs, dur = 0.08, type = 'square', vol = 0.05) {
+      if (!soundOn) return;
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        let t = audioCtx.currentTime;
+        freqs.forEach((f) => {
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.type = type; o.frequency.value = f;
+          g.gain.setValueAtTime(vol, t);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+          o.connect(g).connect(audioCtx.destination);
+          o.start(t); o.stop(t + dur);
+          t += dur;
+        });
+      } catch {}
+    }
+    const sfx = {
+      coin:  () => beep([988, 1319], 0.09),
+      error: () => beep([220, 165, 110], 0.12, 'sawtooth'),
+      win:   () => beep([523, 659, 784, 1047], 0.1),
+      tick:  () => beep([660], 0.03, 'square', 0.02),
+    };
+    soundBtn.addEventListener('click', () => {
+      soundOn = !soundOn;
+      soundBtn.setAttribute('aria-pressed', String(soundOn));
+      soundBtn.textContent = soundOn ? 'SND: ON' : 'SND: OFF';
+      sfx.tick();
+    });
+
+    /* ---------- Score counter ---------- */
+    let score = 0;
+    function addScore(n) {
+      const target = score + n;
+      const step = Math.max(1, Math.floor(n / 20));
+      const iv = setInterval(() => {
+        score = Math.min(target, score + step);
+        scoreEl.textContent = String(score).padStart(6, '0');
+        if (score >= target) clearInterval(iv);
+      }, 25);
     }
 
+    /* ---------- Segmented loading bar ---------- */
+    const SEGMENTS = 16;
+    for (let i = 0; i < SEGMENTS; i++) bar.appendChild(document.createElement('i'));
+    const segs = [...bar.children];
+    let loadTimer = null;
+    let loadPos = 0;
+
+    function startLoader() {
+      loadPos = 0;
+      segs.forEach((s) => s.classList.remove('on'));
+      loader.classList.add('visible');
+      // Eases toward ~90% until the request finishes
+      loadTimer = setInterval(() => {
+        const cap = Math.floor(SEGMENTS * 0.9);
+        if (loadPos < cap) {
+          segs[loadPos++].classList.add('on');
+          sfx.tick();
+        }
+      }, 260);
+    }
+    function finishLoader() {
+      clearInterval(loadTimer);
+      while (loadPos < SEGMENTS) segs[loadPos++].classList.add('on');
+      setTimeout(() => loader.classList.remove('visible'), 450);
+    }
+    function failLoader() {
+      clearInterval(loadTimer);
+      loader.classList.remove('visible');
+    }
+
+    /* ---------- Feedback ---------- */
+    function showFeedback(message, type = '') {
+      feedback.textContent = message;
+      feedback.className = `feedback ${type === true ? 'error' : type}`;
+    }
+
+    /* ---------- URL validation (unchanged logic) ---------- */
     function isTikTokUrl(raw) {
       try {
         const url = new URL(raw);
         const host = url.hostname.toLowerCase();
         return url.protocol === 'https:' && (host === 'tiktok.com' || host.endsWith('.tiktok.com') || host.endsWith('vt.tiktok.com'));
-      } catch { 
-        return false; 
+      } catch {
+        return false;
       }
     }
 
+    /* ---------- Paste button ---------- */
+    pasteBtn.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        input.value = text.trim();
+        input.focus();
+        sfx.coin();
+      } catch {
+        showFeedback('CLIPBOARD BLOCKED. PRESS CTRL+V INSTEAD.', true);
+        input.focus();
+      }
+    });
+
+    /* ---------- Reset ---------- */
+    againBtn.addEventListener('click', () => {
+      result.classList.remove('visible');
+      input.value = '';
+      showFeedback('');
+      input.focus();
+      sfx.tick();
+    });
+
+    /* ---------- Submit ---------- */
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       const url = input.value.trim();
@@ -241,47 +590,107 @@
 
       if (!isTikTokUrl(url)) {
         showFeedback('INVALID URL! PLEASE TRY AGAIN.', true);
+        input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake');
+        sfx.error();
         input.focus();
         return;
       }
 
+      sfx.coin();
       btn.disabled = true;
       btn.innerHTML = 'LOADING...';
       showFeedback('FETCHING DATA FROM SERVER...');
+      startLoader();
 
       try {
-        // Step 1: Kunin ang data mula sa backend
+        // Step 1: get data from backend
         const response = await fetch(`/api/download?url=${encodeURIComponent(url)}`);
-        
+
         let data;
-        try { 
-          data = await response.json(); 
-        } catch { 
-          throw new Error('SERVER ERROR.'); 
+        try {
+          data = await response.json();
+        } catch {
+          throw new Error('SERVER ERROR.');
         }
 
         if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'MISSION FAILED.');
-        
+
         const targetUrl = data.videoUrl || data.downloadUrl;
         if (!targetUrl) throw new Error('VIDEO NOT FOUND.');
 
-        // Step 2: I-set ang title at ilagay ang stream URL sa Download button
+        // Step 2: set title and stream URL on the download button
         title.textContent = typeof data.title === 'string' && data.title ? data.title.toUpperCase() : 'TIKTOK VIDEO READY';
-        
-        // Ito ang magpapatakbo ng rekta download fix mo!
         download.href = `/api/download?stream=${encodeURIComponent(targetUrl)}`;
-        
+
+        finishLoader();
         result.classList.add('visible');
-        showFeedback('SUCCESS!');
-        
+        showFeedback('SUCCESS!', 'ok');
+        sfx.win();
+        addScore(1000);
+        setTimeout(() => result.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+
       } catch (error) {
+        failLoader();
         showFeedback(error instanceof Error ? error.message.toUpperCase() : 'GAME OVER. TRY AGAIN.', true);
+        sfx.error();
       } finally {
         btn.disabled = false;
         btn.innerHTML = 'GET VIDEO <span class="blink">_</span>';
       }
     });
-  </script>
 
+    /* ---------- Starfield background ---------- */
+    (function starfield() {
+      const c = document.getElementById('stars');
+      const ctx = c.getContext('2d');
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const colors = ['#ffffff', '#00f0ff', '#ff2bd6', '#ffe600'];
+      let stars = [];
+
+      function resize() {
+        c.width = window.innerWidth;
+        c.height = window.innerHeight;
+        const count = Math.floor((c.width * c.height) / 9000);
+        stars = Array.from({ length: count }, () => ({
+          x: Math.random() * c.width,
+          y: Math.random() * c.height,
+          s: Math.random() < 0.8 ? 2 : 4,
+          v: 0.15 + Math.random() * 0.6,
+          t: Math.random() * Math.PI * 2,
+          col: colors[(Math.random() * colors.length) | 0],
+        }));
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, c.width, c.height);
+        for (const st of stars) {
+          st.t += 0.05;
+          ctx.globalAlpha = 0.5 + 0.5 * Math.sin(st.t);
+          ctx.fillStyle = st.col;
+          ctx.fillRect(Math.round(st.x), Math.round(st.y), st.s, st.s);
+          if (!reduce) {
+            st.y += st.v;
+            if (st.y > c.height) { st.y = -4; st.x = Math.random() * c.width; }
+          }
+        }
+        ctx.globalAlpha = 1;
+        requestAnimationFrame(draw);
+      }
+
+      window.addEventListener('resize', resize);
+      resize();
+      draw();
+    })();
+
+    /* Konami code easter egg */
+    (function konami() {
+      const seq = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+      let i = 0;
+      window.addEventListener('keydown', (e) => {
+        i = e.key === seq[i] ? i + 1 : 0;
+        if (i === seq.length) { i = 0; addScore(30000); sfx.win(); showFeedback('+30000 CHEAT CODE ACTIVATED!', 'ok'); }
+      });
+    })();
+  </script>
 </body>
 </html>
