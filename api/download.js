@@ -1,73 +1,330 @@
-// Vercel Serverless Function (Node 18+)
-// POST /api/download   { url }        -> { title, videoUrl }
-// GET  /api/download?src=<videoUrl>   -> streams the file as an attachment
 
-const TIKTOK_RE = /^https?:\/\/(www\.|vm\.|vt\.|m\.)?tiktok\.com\//i;
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
-// Only proxy URLs that point at TikTok's CDN, so this can't be abused as an open proxy.
-const CDN_RE = /^https:\/\/[^/]*\.(tiktokcdn[^/]*|tiktokv\.com|byteoversea\.com|ibyteimg\.com)\//i;
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+  "AppleWebKit/537.36 (KHTML, like Gecko) " +
+  "Chrome/124.0 Safari/537.36";
+
+const TIKTOK_DOMAINS = [
+  "tiktok.com"
+];
+
+const VIDEO_DOMAINS = [
+  "tiktok.com",
+  "tiktokcdn.com",
+  "tiktokv.com",
+  "byteoversea.com",
+  "ibyteimg.com"
+];
+
+const REDIRECT_CODES = [301, 302, 303, 307, 308];
+
+function allowedHost(hostname, domains) {
+  const host = hostname.toLowerCase();
+
+  return domains.some((domain) =>
+    host === domain ||
+    host.endsWith("." + domain)
+  );
+}
+
+function validateUrl(raw, domains) {
+  let url;
+
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("Invalid URL.");
+  }
+
+  if (url.protocol !== "https:") {
+    throw new Error("Only HTTPS URLs are supported.");
+  }
+
+  if (!allowedHost(url.hostname, domains)) {
+    throw new Error("URL domain is not allowed.");
+  }
+
+  if (
+    url.username ||
+    url.password ||
+    (url.port && url.port !== "443")
+  ) {
+    throw new Error("Invalid URL configuration.");
+  }
+
+  return url.toString();
+}
+
+async function fetchWithRedirects(
+  initialUrl,
+  domains,
+  headers,
+  timeout = 20000
+) {
+  let currentUrl = validateUrl(initialUrl, domains);
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const response = await fetch(currentUrl, {
+      method: "GET",
+      headers,
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeout)
+    });
+
+    if (REDIRECT_CODES.includes(response.status)) {
+      const location =
+        response.headers.get("location");
+
+      if (!location) {
+        throw new Error("Redirect destination missing.");
+      }
+
+      const nextUrl =
+        new URL(location, currentUrl).toString();
+
+      await response.body?.cancel();
+
+      currentUrl = validateUrl(nextUrl, domains);
+
+      continue;
+    }
+
+    return response;
+  }
+
+  throw new Error("Too many redirects.");
+}
 
 async function parseTikTok(pageUrl) {
-  const res = await fetch(pageUrl, {
-    headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
-    redirect: "follow",
-  });
-  if (!res.ok) throw new Error("TikTok page could not be loaded.");
-
-  const html = await res.text();
-  const match = html.match(
-    /<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/
+  const validUrl = validateUrl(
+    pageUrl,
+    TIKTOK_DOMAINS
   );
-  if (!match) throw new Error("Could not read video data. The page layout may have changed.");
 
-  const data = JSON.parse(match[1]);
+  const response = await fetchWithRedirects(
+    validUrl,
+    TIKTOK_DOMAINS,
+    {
+      "User-Agent": USER_AGENT,
+      "Accept-Language": "en-US,en;q=0.9",
+      "Accept": "text/html"
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Unable to access TikTok (HTTP ${response.status}).`
+    );
+  }
+
+  const html = await response.text();
+
+  const match = html.match(
+    /<script\b[^>]*\bid=["']__UNIVERSAL_DATA_FOR_REHYDRATION__["'][^>]*>([\s\S]*?)<\/script>/i
+  );
+
+  if (!match) {
+    throw new Error(
+      "TikTok video information was not found. " +
+      "The video may be unavailable, TikTok may " +
+      "have blocked the request, or its page " +
+      "structure may have changed."
+    );
+  }
+
+  let data;
+
+  try {
+    data = JSON.parse(match[1]);
+  } catch {
+    throw new Error("Unable to parse TikTok data.");
+  }
+
   const item =
-    data?.__DEFAULT_SCOPE__?.["webapp.video-detail"]?.itemInfo?.itemStruct;
-  const video = item?.video;
-  const videoUrl = video?.playAddr || video?.downloadAddr;
+    data?.__DEFAULT_SCOPE__?.[
+      "webapp.video-detail"
+    ]?.itemInfo?.itemStruct;
 
-  if (!videoUrl) throw new Error("No video found at this link. It may be private or removed.");
+  if (!item) {
+    throw new Error(
+      "Video details are unavailable. " +
+      "Check if the video is public."
+    );
+  }
+
+  const video = item.video;
+
+  if (!video) {
+    throw new Error("This post has no available video.");
+  }
+
+  const videoUrl =
+    video.playAddr ||
+    video.downloadAddr;
+
+  if (!videoUrl) {
+    throw new Error(
+      "No downloadable video source found."
+    );
+  }
+
+  validateUrl(videoUrl, VIDEO_DOMAINS);
 
   return {
-    title: item?.desc?.slice(0, 120) || "tiktok-video",
-    videoUrl,
+    title:
+      typeof item.desc === "string"
+        ? item.desc.slice(0, 120) || "TikTok Video"
+        : "TikTok Video",
+    videoUrl
   };
 }
 
-export default async function handler(req, res) {
-  try {
-    // Stream the file to the browser
-    if (req.method === "GET") {
-      const src = req.query.src;
-      if (!src || !CDN_RE.test(src)) return res.status(400).json({ error: "Invalid source." });
+async function streamVideo(src, res) {
+  const validSrc = validateUrl(
+    src,
+    VIDEO_DOMAINS
+  );
 
-      const upstream = await fetch(src, {
-        headers: { "User-Agent": UA, Referer: "https://www.tiktok.com/" },
-      });
-      if (!upstream.ok) return res.status(502).json({ error: "Video download failed." });
+  const upstream = await fetchWithRedirects(
+    validSrc,
+    VIDEO_DOMAINS,
+    {
+      "User-Agent": USER_AGENT,
+      "Referer": "https://www.tiktok.com/",
+      "Accept": "video/*,application/octet-stream"
+    },
+    25000
+  );
 
-      res.setHeader("Content-Type", "video/mp4");
-      res.setHeader("Content-Disposition", 'attachment; filename="tiktok-video.mp4"');
-      const len = upstream.headers.get("content-length");
-      if (len) res.setHeader("Content-Length", len);
+  if (!upstream.ok || !upstream.body) {
+    await upstream.body?.cancel();
 
-      const { Readable } = await import("node:stream");
-      return Readable.fromWeb(upstream.body).pipe(res);
-    }
+    const error = new Error(
+      `TikTok CDN returned HTTP ${upstream.status}.`
+    );
 
-    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed." });
-
-    const url = String(req.body?.url || "").trim();
-    if (!TIKTOK_RE.test(url)) {
-      return res.status(400).json({ error: "Please paste a valid TikTok link." });
-    }
-
-    const info = await parseTikTok(url);
-    return res.status(200).json(info);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: err.message || "Something went wrong." });
+    error.statusCode = 502;
+    throw error;
   }
+
+  const contentType = (
+    upstream.headers.get("content-type") || ""
+  ).toLowerCase();
+
+  const isVideo =
+    contentType.startsWith("video/") ||
+    contentType.includes("application/octet-stream");
+
+  if (!isVideo) {
+    await upstream.body.cancel();
+
+    const error = new Error(
+      "The source did not return a video. " +
+      "The CDN URL may have expired."
+    );
+
+    error.statusCode = 502;
+    throw error;
+  }
+
+  res.statusCode = 200;
+
+  res.setHeader(
+    "Content-Type",
+    "video/mp4"
+  );
+
+  res.setHeader(
+    "Content-Disposition",
+    'attachment; filename="clipsaver-video.mp4"'
+  );
+
+  res.setHeader(
+    "Cache-Control",
+    "no-store"
+  );
+
+  res.setHeader(
+    "X-Content-Type-Options",
+    "nosniff"
+  );
+
+  const length =
+    upstream.headers.get("content-length");
+
+  if (length && /^\d+$/.test(length)) {
+    res.setHeader("Content-Length", length);
+  }
+
+  await pipeline(
+    Readable.fromWeb(upstream.body),
+    res
+  );
+}
+
+export default async function handler(req, res) {
+  res.setHeader("Cache-Control", "no-store");
+
+  try {
+    if (req.method === "POST") {
+      const body =
+        typeof req.body === "string"
+          ? JSON.parse(req.body)
+          : req.body;
+
+      const url = String(
+        body?.url || ""
+      ).trim();
+
+      if (!url) {
+        return res.status(400).json({
+          error: "Please enter a TikTok URL."
+        });
       }
+
+      const info = await parseTikTok(url);
+
+      return res.status(200).json(info);
+    }
+
+    if (req.method === "GET") {
+      const src =
+        typeof req.query.src === "string"
+          ? req.query.src
+          : "";
+
+      if (!src) {
+        return res.status(400).json({
+          error: "Missing video URL."
+        });
+      }
+
+      return await streamVideo(src, res);
+    }
+
+    res.setHeader("Allow", "GET, POST");
+
+    return res.status(405).json({
+      error: "Method not allowed."
+    });
+
+  } catch (error) {
+    console.error("ClipSaver API error:", error);
+
+    if (res.headersSent) {
+      res.destroy(error);
+      return;
+    }
+
+    const status =
+      error.statusCode ||
+      (error.name === "TimeoutError" ? 504 : 500);
+
+    return res.status(status).json({
+      error: error.message || "Download failed."
+    });
+  }
+}
