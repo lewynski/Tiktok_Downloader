@@ -12,14 +12,34 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const url = req.query.url || req.body?.url;
+  // 1. Kapag nag-trigger ng Direct Download via proxy (action=?stream=true)
+  const streamUrl = req.query.stream;
+  if (streamUrl) {
+    try {
+      const mediaResponse = await fetch(decodeURIComponent(streamUrl));
+      if (!mediaResponse.ok) throw new Error('Failed to fetch media');
 
+      // I-set ang Content-Disposition header para FORCE DOWNLOAD sa browser
+      const filename = `tiktok-video-${Date.now()}.mp4`;
+      res.setHeader('Content-Type', 'video/mp4');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+      // Stream ang video data pabalik sa user
+      const arrayBuffer = await mediaResponse.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      return res.send(buffer);
+    } catch (err) {
+      return res.status(500).json({ error: 'Failed to stream video file.' });
+    }
+  }
+
+  // 2. Fetch video details mula sa TikWM API
+  const url = req.query.url || req.body?.url;
   if (!url) {
     return res.status(400).json({ error: 'TikTok URL is required' });
   }
 
   try {
-    // Fetch video data from TikWM API (No watermark)
     const apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`;
     const response = await fetch(apiUrl);
     const data = await response.json();
@@ -27,8 +47,7 @@ export default async function handler(req, res) {
     if (data.code === 0 && data.data) {
       return res.status(200).json({
         status: 'success',
-        videoUrl: data.data.play, // Direct watermark-free MP4 URL
-        downloadUrl: data.data.play, // Fallback key matching both script formats
+        videoUrl: data.data.play,
         title: data.data.title || 'TikTok Video',
         author: data.data.author?.nickname || ''
       });
